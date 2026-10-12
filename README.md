@@ -18,8 +18,7 @@ The skill reads complete paginated inventories, inspects domain and DNS state, p
 - Python **3.10+** on **macOS, Linux, or WSL**. The client uses only the Python standard library. Native Windows file-permission handling is not supported.
 - A GoDaddy [Personal Access Token](https://developer.godaddy.com/personal-access-token), required for v3. Classic key/secret credentials work with v1/v2 only.
 - `domains.domain:read` for inventory and DNS reads; `domains.dns:update` for DNS record changes; `domains.nameserver:update` for nameserver replacement. Other operations need their documented scopes and account eligibility.
-- **Optional:** 1Password CLI (`op`) for importing a PAT from your own item and field. No vault or account is assumed.
-- No required environment variables. Credentials are read from `~/.config/godaddy/credentials.json`, or the global `--credentials PATH` option.
+- Configure either environment variables (`GODADDY_PAT`, or `GODADDY_KEY` + `GODADDY_SECRET`) or a private `~/.config/godaddy/credentials.json` file. No password-manager software is required.
 - Node.js/npm is needed only if you install using the `skills` CLI.
 
 A successful GET establishes read capability, not a complete list of token scopes. Purchases, renewals, transfers, cancellation, and deletion require authorization for the exact domain, term, and cost.
@@ -36,29 +35,52 @@ Add `--global` if you prefer a user-level installation. The repository has a sta
 
 [Browse on skills.sh](https://skills.sh/joeeeeey/godaddy-ops/godaddy-ops).
 
-## Credentials
+## Credential setup
 
-Create a private directory with mode `0700` and a credential file with mode `0600`. Use a local editor or secret manager; never paste real tokens into agent chats, shell arguments, or this repository.
+Choose either environment variables or a config file. Use your own [GoDaddy PAT](https://developer.godaddy.com/personal-access-token). Never paste real tokens into agent chats, command arguments, or this repository.
 
-PAT credential-file structure (placeholder only):
+### Option 1: environment variables
+
+Set `GODADDY_PAT` for PAT authentication. For example, in a local Bash/Zsh terminal, enter it with hidden input so the value is not recorded in shell history:
+
+```bash
+read -rs GODADDY_PAT
+export GODADDY_PAT
+```
+
+The first command waits for you to enter the PAT locally. For classic credentials, set both `GODADDY_KEY` and `GODADDY_SECRET` instead:
+
+```bash
+read -rs GODADDY_KEY
+read -rs GODADDY_SECRET
+export GODADDY_KEY GODADDY_SECRET
+```
+
+You can also inject these variables using your existing CI or runtime configuration. `GODADDY_PAT` takes precedence over classic credentials if both are present. Empty PATs or incomplete key/secret pairs fail without silently switching accounts.
+
+### Option 2: config file
+
+Create `~/.config/godaddy/credentials.json` using a local editor. Set the directory to mode `0700` and the file to mode `0600`, owned by your user. The JSON formats below contain placeholders, not real credentials.
+
+PAT:
 
 ```json
 {"auth_type":"pat","token":"<personal-access-token>"}
 ```
 
-Classic credential-file structure:
+Classic key/secret:
 
 ```json
 {"auth_type":"sso-key","key":"<classic-key>","secret":"<classic-secret>"}
 ```
 
-With 1Password, run from the installed skill directory:
+To use another file:
 
 ```bash
-python3 scripts/import_1password.py --item 'GoDaddy API' --vault 'Infrastructure' --field token
+python3 scripts/godaddy.py --credentials /path/to/credentials.json domains
 ```
 
-Supply your own item, vault, and field. The importer prints no secret values and refuses ambiguous fields or overwriting an existing file unless `--replace` is supplied.
+**Selection order:** explicit `--credentials PATH` > environment variables > default config file. An explicit file is useful when switching accounts or using OTE while production credentials are present in the environment.
 
 ## Operator reference
 
@@ -91,10 +113,9 @@ The client refuses credential-file symlinks and group/world-readable files, rest
 
 ```bash
 python3 scripts/test_godaddy.py
-python3 scripts/test_import_1password.py
 ```
 
-All tests use synthetic credentials and mocked API/1Password responses. They do not contact GoDaddy. A live read-only smoke test is `python3 scripts/godaddy.py domains` after you configure credentials. No private account snapshots or tokens are distributed.
+All tests use synthetic credentials and mocked API responses. They do not contact GoDaddy. A live read-only smoke test is `python3 scripts/godaddy.py domains` after you configure credentials. No private account snapshots or tokens are distributed.
 
 See [API notes](references/api.md) for endpoint behavior, scopes, pagination, errors, and official sources.
 

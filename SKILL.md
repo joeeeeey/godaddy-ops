@@ -9,7 +9,11 @@ Use the bundled Python 3.10+ standard-library client on macOS, Linux, or WSL. Re
 
 ## Credentials
 
-Default: `~/.config/godaddy/credentials.json`, directory `0700`, file `0600`. Global `--credentials PATH` overrides it. Never print tokens, pass them in command arguments, or copy them into task memory. Accepted JSON:
+Two setup methods are supported: environment variables or a local config file. No password-manager integration is required. Obtain a scoped PAT at the [GoDaddy developer portal](https://developer.godaddy.com/personal-access-token). Never print tokens, pass them in command arguments, or copy them into task memory; do not ask users to paste tokens into chat.
+
+**Environment:** `GODADDY_PAT` for a PAT, or both `GODADDY_KEY` and `GODADDY_SECRET` for classic credentials. Have the user configure these locally or inject them from their runtime environment. PAT takes precedence when both types are present. Empty or incomplete environment credentials fail without falling back to another account.
+
+**Config file:** `~/.config/godaddy/credentials.json`, directory mode `0700`, file mode `0600`, owned by the current user. Accepted JSON:
 
 ```json
 {"auth_type":"pat","token":"<personal-access-token>"}
@@ -19,15 +23,7 @@ Default: `~/.config/godaddy/credentials.json`, directory `0700`, file `0600`. Gl
 {"auth_type":"sso-key","key":"<classic-key>","secret":"<classic-secret>"}
 ```
 
-Credentials can be created on the [GoDaddy developer portal](https://developer.godaddy.com/personal-access-token). Prefer a scoped PAT for new integrations. Obtain authorization before retrieving or exporting a secret; existing session authorization is sufficient. Never require the user to paste a token into chat.
-
-1Password is optional. If the operator uses it, ask for the item/vault and exact PAT field, and use the desktop-integrated `op` CLI. Capture item JSON in a process and print only field labels/types/section names when disambiguation is needed. Never print the full item or its values. Import just the selected PAT:
-
-```bash
-python3 scripts/import_1password.py --item 'GoDaddy API' --vault 'Infrastructure' --field token
-```
-
-The importer refuses ambiguous fields or an existing credential file. `--replace` explicitly replaces the local file, without rotating the upstream token. `--vault` and `--section` disambiguate names. If unlock fails or is canceled, stop credential-dependent work; do not bypass it.
+Credential selection order: explicit global `--credentials PATH` > environment variables > default config file. Use an explicit file to select a different account or OTE credentials when production environment variables are set. Preserve existing config files unless replacement is authorized.
 
 For permission introspection, see [API notes](references/api.md#permission-introspection). No public PAT scope-introspection endpoint was found in the official documentation checked on 2026-10-12. Successful reads establish effective read capability, not the exact granted scopes or absence of write permissions. Do not probe writes to discover permissions.
 

@@ -31,16 +31,25 @@ def safe_url(base, path):
         raise Failure('Refusing destination outside the selected GoDaddy API.')
     return url
 
-def credentials(path):
-    try:
-        fd = os.open(Path(path).expanduser(), os.O_RDONLY | os.O_NOFOLLOW)
-        with os.fdopen(fd) as f:
-            info = os.fstat(f.fileno())
-            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
-                raise Failure('Credential file must be owned by you with mode 0600.')
-            data = json.load(f)
-    except (OSError, ValueError):
-        raise Failure('Cannot read credentials JSON; check path, format, and permissions.') from None
+def credentials(path=None):
+    data = None
+    if path is None:
+        if 'GODADDY_PAT' in os.environ:
+            data = {'auth_type': 'pat', 'token': os.environ['GODADDY_PAT']}
+        elif 'GODADDY_KEY' in os.environ or 'GODADDY_SECRET' in os.environ:
+            data = {'auth_type': 'sso-key', 'key': os.environ.get('GODADDY_KEY'), 'secret': os.environ.get('GODADDY_SECRET')}
+        else:
+            path = DEFAULT_CREDENTIALS
+    if data is None:
+        try:
+            fd = os.open(Path(path).expanduser(), os.O_RDONLY | os.O_NOFOLLOW)
+            with os.fdopen(fd) as f:
+                info = os.fstat(f.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+                    raise Failure('Credential file must be owned by you with mode 0600.')
+                data = json.load(f)
+        except (OSError, ValueError):
+            raise Failure('Cannot read credentials JSON; configure GODADDY_PAT or check credential-file path, format, and permissions.') from None
     if not isinstance(data, dict):
         raise Failure('Credentials must be a JSON object.')
     kind = data.get('auth_type', 'pat')
@@ -145,7 +154,7 @@ def segment(value):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--credentials', default=str(DEFAULT_CREDENTIALS))
+    parser.add_argument('--credentials', help='Explicit config file; overrides environment credentials. Default file is ~/.config/godaddy/credentials.json.')
     parser.add_argument('--environment', choices=BASES, default='production')
     sub = parser.add_subparsers(dest='command', required=True)
     listing = sub.add_parser('domains', help='List every domain, following all pages')

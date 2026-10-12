@@ -3,6 +3,7 @@
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -65,6 +66,36 @@ class Tests(unittest.TestCase):
             p.chmod(0o644)
             with self.assertRaises(g.Failure):
                 g.credentials(p)
+
+    def test_environment_pat_precedes_default_file_and_classic_environment(self):
+        with patch.dict(os.environ, {'GODADDY_PAT': 'SYNTHETIC_ENV_PAT', 'GODADDY_KEY': 'SYNTHETIC_KEY', 'GODADDY_SECRET': 'SYNTHETIC_SECRET'}, clear=True), patch.object(g.os, 'open', side_effect=AssertionError('must not read file')):
+            self.assertEqual(g.credentials(), ('pat', 'Bearer SYNTHETIC_ENV_PAT'))
+
+    def test_complete_classic_environment(self):
+        with patch.dict(os.environ, {'GODADDY_KEY': 'SYNTHETIC_KEY', 'GODADDY_SECRET': 'SYNTHETIC_SECRET'}, clear=True):
+            self.assertEqual(g.credentials(), ('sso-key', 'sso-key SYNTHETIC_KEY:SYNTHETIC_SECRET'))
+
+    def test_incomplete_or_empty_environment_does_not_silently_fall_back(self):
+        for environment in [{'GODADDY_KEY': 'SYNTHETIC_KEY'}, {'GODADDY_SECRET': 'SYNTHETIC_SECRET'}, {'GODADDY_PAT': ''}]:
+            with self.subTest(environment=environment), patch.dict(os.environ, environment, clear=True), patch.object(g.os, 'open', side_effect=AssertionError('must not fall back')):
+                with self.assertRaises(g.Failure):
+                    g.credentials()
+
+    def test_explicit_file_overrides_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            p = Path(directory) / 'credentials.json'
+            p.write_text(json.dumps({'auth_type': 'pat', 'token': 'SYNTHETIC_FILE_PAT'}))
+            p.chmod(0o600)
+            with patch.dict(os.environ, {'GODADDY_PAT': 'SYNTHETIC_ENV_PAT'}, clear=True):
+                self.assertEqual(g.credentials(p), ('pat', 'Bearer SYNTHETIC_FILE_PAT'))
+
+    def test_default_file_used_without_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            p = Path(directory) / 'credentials.json'
+            p.write_text(json.dumps({'auth_type': 'pat', 'token': 'SYNTHETIC_FILE_PAT'}))
+            p.chmod(0o600)
+            with patch.dict(os.environ, {}, clear=True), patch.object(g, 'DEFAULT_CREDENTIALS', p):
+                self.assertEqual(g.credentials(), ('pat', 'Bearer SYNTHETIC_FILE_PAT'))
 
     def test_explicit_write_sent_once_and_preserves_async_location(self):
         client = g.Client.__new__(g.Client)
