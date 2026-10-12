@@ -1,0 +1,4 @@
+interface:
+  display_name: "GoDaddy Ops"
+  short_description: "Manage GoDaddy domains and DNS through the API"
+  default_prompt: "Use $godaddy-ops to list all domains in the configured GoDaddy account."
